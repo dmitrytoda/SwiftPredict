@@ -1,0 +1,29 @@
+---
+title: "Exploratory Data Analysis"
+output: html_notebook
+---
+
+Load tokinezed sampled corpora
+```{r}
+source('file2tokens.r')
+
+smp.twitter <- file2tokens('./data/en_US/sample.twitter.txt')
+smp.blogs <- file2tokens('./data/en_US/sample.blogs.txt')
+smp.news <- file2tokens('./data/en_US/sample.news.txt')
+```
+
+Create count table
+```{r}
+source('EDA.R')
+word.counts <- wordFreq(c(smp.twitter, smp.blogs, smp.news))
+```
+
+Plot most frequent words
+```{r}
+library(ggplot2)
+
+ggplot(data=word.counts[1:50,], aes(x=reorder(word, -freq), y=freq)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
+```
+
+
+
