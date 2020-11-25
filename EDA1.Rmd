@@ -1,0 +1,161 @@
+---
+title: 'SwiftPredict: data cleaning and frequency analysis'
+author: "Dmitry Dolgov"
+date: "11/24/2020"
+output: 
+        html_document:
+                number_sections: true
+                toc: true
+                toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Load and format data
+
+## Load sampled data
+
+Provided corpora were sampled outside of this notebook by selecting ~50,000 random lines from each file. Here I read the sampled files into memory. Each line may represent several sentences but I chose not to split them because:
+
+1. Default sentence splitters (like the one from qdap package) just think any .!? symbol is end of sentence, and acronyms like U.S.A. and N.Y. (quite common in the news) get split.
+2. The system should be able to predict ngrams crossing sentence boundaries as well (a previous sentence is often a good indicator of what the next sentence will be about, or will start with).
+
+```{r load, message=FALSE}
+library(tm)
+library(slam)
+library(ggplot2)
+library(scales)
+library(tokenizers)
+
+twitter <- readLines('./data/en_US/sample.twitter.txt', skipNul = TRUE)
+blogs <- readLines('./data/en_US/sample.blogs.txt', skipNul = TRUE)
+news <- readLines('./data/en_US/sample.news.txt', skipNul = TRUE)
+
+twitter <- enc2utf8(twitter)
+blogs <- enc2utf8(blogs)
+news <- enc2utf8(news)
+all <- c(twitter, blogs, news)
+```
+
+Each of the three variables is a character vector with ~50,000 elements, each element representing a line of the initial file (a tweet, a blog post or a news article), possibly containing several sentences.
+
+## Remove profanity words
+
+I chose not to remove profanity words at this stage, as some users actually employ them and may want them to be predicted. On a later stage, when developing an app, I will include it as a check-box kind of option: if a user so desires, profanity words will be excluded from predictions. Also, removing them now would create unnatural n-grams, e.g. if the initial sentence was "what the <profanity> is this?!", then after removing we'll get "what the is this?!", and the system will potentially learn that "the is" is a valid 2-gram, which it is not.
+
+## Creating corpora and cleaning
+
+R tm (text mining) package works with a special class called Corpus. Here I transform raw texts to this format and do the following cleaning:
+
+1. Remove numbers
+2. Remove 'RT' (meaning re-tweet)
+3. Remove punctuation (note that this will also collapse things like U.S.A. into USA which is also a valid spelling)
+4. Remove extra white spaces
+5. Convert everything to lower case
+
+I do not remove "stop words" which include such frequent words as I, a, the etc. These words will have to be predicted as they are in fact the most common ones people type. 
+
+```{r createCorpora, warning=FALSE}
+twitterCorpus <- Corpus(VectorSource(twitter), readerControl = list(language = "UTF-8"))
+blogsCorpus <- Corpus(VectorSource(blogs), readerControl = list(language = "UTF-8"))
+newsCorpus <- Corpus(VectorSource(news), readerControl = list(language = "UTF-8"))
+allCorpus <- Corpus(VectorSource(all), readerControl = list(language = "UTF-8"))
+
+removeRT <- function(corpus) {
+  gsub("RT","", corpus)
+}
+
+cleanCorpus <- function(corpus) {
+    corpus <- tm_map(corpus, removeNumbers)
+    corpus <- tm_map(corpus, removeRT)
+    corpus <- tm_map(corpus, removePunctuation, preserve_intra_word_contractions=TRUE, preserve_intra_word_dashes=TRUE)
+    corpus <- tm_map(corpus, stripWhitespace)
+    corpus <- tm_map(corpus, tolower)
+    corpus
+}
+
+twitterCorpus <- cleanCorpus(twitterCorpus)
+blogsCorpus <- cleanCorpus(blogsCorpus)
+newsCorpus <- cleanCorpus(newsCorpus)
+allCorpus <- cleanCorpus(allCorpus)
+```
+
+# Frequencies analysis
+
+## Word (unigram) frequencies
+
+What are the most common words the data?
+The TermDocumentMatrix from tm package allows to create a very sparse matrix counting the number of times each term (in this case a word, but in later section a bi- or trigram) appears in each document (a line of the original file: a tweet, a blog post etc).
+
+```{r unigrams}
+unigram <- function(corpus) {
+    TDM2D <- TermDocumentMatrix(corpus)
+    
+    # calculate the number of times a term is present across all documents
+    TDM1D <- rollup(TDM2D, 2, na.rm = TRUE, FUN = sum)
+    
+    # convert to dataframe and order
+    unigramDF <- data.frame(words = TDM1D$dimnames$Terms, freq = TDM1D$v)
+    unigramDF <- unigramDF[order(-unigramDF$freq),]
+    
+    # calculate percentages, cumulative counts and cumulative percentages
+    unigramDF$percentage <- unigramDF$freq / sum(unigramDF$freq)
+    unigramDF$cumsum <- cumsum(unigramDF$freq)
+    unigramDF$cumpercentage <- cumsum(unigramDF$percentage)
+    unigramDF
+}
+
+twitter1DF <- unigram(twitterCorpus)
+blogs1DF <- unigram(blogsCorpus)
+news1DF <- unigram(newsCorpus)
+all1DF <- unigram(allCorpus)
+
+c50 <- max(which(all1DF$cumpercentage<=.5))
+c90 <- max(which(all1DF$cumpercentage<=.9))
+c99 <- max(which(all1DF$cumpercentage<=.99))
+```
+
+Plot cumulative word percentages
+```{r plotPercentageCovered}
+ggplot(data=all1DF[as.integer(rownames(all1DF))%%5==1,], aes(x=seq_along(cumpercentage), y=cumpercentage)) + geom_point(color='steelblue') + scale_x_continuous(labels = comma) + labs(x='Words count', y='Cumulative % covered') + geom_hline(yintercept=.5) + geom_hline(yintercept=.9) + geom_hline(yintercept=.99)
+```
+
+How many unique words are needed to cover a certain % of all words?
+
+* 50% - `r c50`
+* 90% - `r c90`
+* 99% - `r c99`
+
+```{r plotFrequentWords}
+ggplot(data=all1DF[1:20,], aes(x=reorder(words, -percentage), y=percentage)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
+```
+
+## Bigram frequencies
+
+Bigram is but a pair of words together in the text. Such combinations will be useful to predict what words will appear next.
+
+```{r}
+allText <- sapply(allCorpus, as.character)
+bigrams <- sapply(allText, tokenize_ngrams, n=2, simplify=FALSE)
+bigrams <- unlist(bigrams, use.names = FALSE)
+bigramsDF <- data.frame(table(bigrams))
+bigramsDF <- bigramsDF[order(-bigramsDF$Freq),]
+
+ggplot(data=bigramsDF[1:20,], aes(x=reorder(bigrams, -Freq), y=Freq)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('Bigram')
+```
+
+## Trigram frequencies
+
+By analogy with bigrams:
+```{r}
+trigrams <- sapply(allText, tokenize_ngrams, n=3, simplify=FALSE)
+trigrams <- unlist(trigrams, use.names = FALSE)
+trigramsDF <- data.frame(table(trigrams))
+trigramsDF <- trigramsDF[order(-trigramsDF$Freq),]
+
+ggplot(data=trigramsDF[1:20,], aes(x=reorder(trigrams, -Freq), y=Freq)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('Trigram')
+```

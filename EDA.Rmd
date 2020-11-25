@@ -25,5 +25,12 @@ library(ggplot2)
 ggplot(data=word.counts[1:50,], aes(x=reorder(word, -freq), y=freq)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
 ```
 
+# Load corpora using tm
 
+```{r}
+raw.smp.twitter <- readLines('./data/en_US/sample.twitter.txt')
+
+source('createTDM.R')
+tdm.twitter1 <- createTDM(raw.smp.twitter, 2)
+```
 
