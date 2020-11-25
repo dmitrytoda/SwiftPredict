@@ -39,6 +39,7 @@ twitter <- enc2utf8(twitter)
 blogs <- enc2utf8(blogs)
 news <- enc2utf8(news)
 all <- c(twitter, blogs, news)
+remove(twitter, blogs, news)
 ```
 
 Each of the three variables is a character vector with ~50,000 elements, each element representing a line of the initial file (a tweet, a blog post or a news article), possibly containing several sentences.
@@ -60,27 +61,31 @@ R tm (text mining) package works with a special class called Corpus. Here I tran
 I do not remove "stop words" which include such frequent words as I, a, the etc. These words will have to be predicted as they are in fact the most common ones people type. 
 
 ```{r createCorpora, warning=FALSE}
-twitterCorpus <- Corpus(VectorSource(twitter), readerControl = list(language = "UTF-8"))
-blogsCorpus <- Corpus(VectorSource(blogs), readerControl = list(language = "UTF-8"))
-newsCorpus <- Corpus(VectorSource(news), readerControl = list(language = "UTF-8"))
 allCorpus <- Corpus(VectorSource(all), readerControl = list(language = "UTF-8"))
 
 removeRT <- function(corpus) {
   gsub("RT","", corpus)
 }
 
+# removes all words that contain anything except letters and numbers
+removeForeign <- function(corpus) {
+  gsub(pattern = '[a-zA-Z0-9]*[^a-zA-Z0-9\\s]+[a-zA-Z0-9]*',
+       replacement='',
+       x=corpus, 
+       ignore.case = TRUE,
+       perl = TRUE)
+}
+
 cleanCorpus <- function(corpus) {
     corpus <- tm_map(corpus, removeNumbers)
     corpus <- tm_map(corpus, removeRT)
+    corpus <- tm_map(corpus, removeForeign)
     corpus <- tm_map(corpus, removePunctuation, preserve_intra_word_contractions=TRUE, preserve_intra_word_dashes=TRUE)
     corpus <- tm_map(corpus, stripWhitespace)
     corpus <- tm_map(corpus, tolower)
     corpus
 }
 
-twitterCorpus <- cleanCorpus(twitterCorpus)
-blogsCorpus <- cleanCorpus(blogsCorpus)
-newsCorpus <- cleanCorpus(newsCorpus)
 allCorpus <- cleanCorpus(allCorpus)
 ```
 
@@ -109,26 +114,23 @@ unigram <- function(corpus) {
     unigramDF
 }
 
-twitter1DF <- unigram(twitterCorpus)
-blogs1DF <- unigram(blogsCorpus)
-news1DF <- unigram(newsCorpus)
-all1DF <- unigram(allCorpus)
+unigramDF <- unigram(allCorpus)
 
-c50 <- max(which(all1DF$cumpercentage<=.5))
-c90 <- max(which(all1DF$cumpercentage<=.9))
-c99 <- max(which(all1DF$cumpercentage<=.99))
+c50 <- max(which(unigramDF$cumpercentage<=.5))
+c90 <- max(which(unigramDF$cumpercentage<=.9))
+c95 <- max(which(unigramDF$cumpercentage<=.95))
 ```
 
 Plot cumulative word percentages
 ```{r plotPercentageCovered}
-ggplot(data=all1DF[as.integer(rownames(all1DF))%%5==1,], aes(x=seq_along(cumpercentage), y=cumpercentage)) + geom_point(color='steelblue') + scale_x_continuous(labels = comma) + labs(x='Words count', y='Cumulative % covered') + geom_hline(yintercept=.5) + geom_hline(yintercept=.9) + geom_hline(yintercept=.99)
+ggplot(data=unigramDF[as.integer(rownames(unigramDF))%%5==1,], aes(x=seq_along(cumpercentage), y=cumpercentage)) + geom_point(color='steelblue') + scale_x_continuous(labels = comma) + labs(x='Words count', y='Cumulative % covered') + geom_hline(yintercept=.5) + geom_hline(yintercept=.9) + geom_hline(yintercept=.95)
 ```
 
 How many unique words are needed to cover a certain % of all words?
 
 * 50% - `r c50`
 * 90% - `r c90`
-* 99% - `r c99`
+* 95% - `r c95`
 
 ```{r plotFrequentWords}
 ggplot(data=all1DF[1:20,], aes(x=reorder(words, -percentage), y=percentage)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
