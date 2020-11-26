@@ -30,6 +30,8 @@ library(slam)
 library(ggplot2)
 library(scales)
 library(tokenizers)
+library(stringr)
+library(dplyr)
 
 twitter <- readLines('./data/en_US/sample.twitter.txt', skipNul = TRUE)
 blogs <- readLines('./data/en_US/sample.blogs.txt', skipNul = TRUE)
@@ -69,7 +71,7 @@ removeRT <- function(corpus) {
 
 # removes all words that contain anything except letters and numbers
 removeForeign <- function(corpus) {
-  gsub(pattern = '[a-zA-Z0-9]*[^a-zA-Z0-9\\s]+[a-zA-Z0-9]*',
+  gsub(pattern = "[a-zA-Z0-9]*[^a-zA-Z0-9\\&\\-'’\\s]+[a-zA-Z0-9]*",
        replacement='',
        x=corpus, 
        ignore.case = TRUE,
@@ -97,51 +99,51 @@ What are the most common words the data?
 The TermDocumentMatrix from tm package allows to create a very sparse matrix counting the number of times each term (in this case a word, but in later section a bi- or trigram) appears in each document (a line of the original file: a tweet, a blog post etc).
 
 ```{r unigrams}
-unigram <- function(corpus) {
-    TDM2D <- TermDocumentMatrix(corpus)
-    
-    # calculate the number of times a term is present across all documents
-    TDM1D <- rollup(TDM2D, 2, na.rm = TRUE, FUN = sum)
-    
-    # convert to dataframe and order
-    unigramDF <- data.frame(words = TDM1D$dimnames$Terms, freq = TDM1D$v)
-    unigramDF <- unigramDF[order(-unigramDF$freq),]
-    
-    # calculate percentages, cumulative counts and cumulative percentages
-    unigramDF$percentage <- unigramDF$freq / sum(unigramDF$freq)
-    unigramDF$cumsum <- cumsum(unigramDF$freq)
-    unigramDF$cumpercentage <- cumsum(unigramDF$percentage)
-    unigramDF
-}
+allText <- sapply(allCorpus, as.character)
+unigrams <- sapply(allText, tokenize_ngrams, n=1, simplify=FALSE)
+unigrams <- unlist(unigrams, use.names = FALSE)
+unigramsDF <- data.frame(table(unigrams))
+unigramsDF <- unigramsDF[order(-unigramsDF$Freq),]
+rownames(unigramsDF) <- NULL
 
-unigramDF <- unigram(allCorpus)
+unigramsDF$perc <- unigramsDF$Freq / sum(unigramsDF$Freq)
+unigramsDF$cumpercentage <- cumsum(unigramsDF$perc)
 
-c50 <- max(which(unigramDF$cumpercentage<=.5))
-c90 <- max(which(unigramDF$cumpercentage<=.9))
-c95 <- max(which(unigramDF$cumpercentage<=.95))
+c50 <- min(which(unigramsDF$cumpercentage>=.5))
+c90 <- min(which(unigramsDF$cumpercentage>=.9))
+c99 <- min(which(unigramsDF$cumpercentage>=.99))
 ```
 
-Plot cumulative word percentages
+Plot cumulative word percentages. X axis is in logarithmic scale, horizontal lines correspond to 50%, 90% and 99% of text coverage.
 ```{r plotPercentageCovered}
-ggplot(data=unigramDF[as.integer(rownames(unigramDF))%%5==1,], aes(x=seq_along(cumpercentage), y=cumpercentage)) + geom_point(color='steelblue') + scale_x_continuous(labels = comma) + labs(x='Words count', y='Cumulative % covered') + geom_hline(yintercept=.5) + geom_hline(yintercept=.9) + geom_hline(yintercept=.95)
+ggplot(data=unigramsDF, aes(x=as.integer(rownames(unigramsDF)), y=cumpercentage)) + geom_point(color='steelblue') + 
+        scale_x_continuous(labels = comma, trans="log10", breaks=c(10, 500, c50, 1000, c90, c99, 100000), minor_breaks = NULL) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        labs(x='Words count', y='Cumulative % covered') +
+        geom_hline(yintercept=.5) + 
+        geom_hline(yintercept=.9) + 
+        geom_hline(yintercept=.99)
 ```
 
 How many unique words are needed to cover a certain % of all words?
 
-* 50% - `r c50`
+* 50% - `r c50` (sic!)
 * 90% - `r c90`
-* 95% - `r c95`
+* 95% - `r c99`
 
-```{r plotFrequentWords}
-ggplot(data=all1DF[1:20,], aes(x=reorder(words, -percentage), y=percentage)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
+Given this, I will use top 50,000 words (unigrams) to create a dictionary that will cover almost 99% of all written text.
+
+```{r frequentWords}
+dict <- as.character(unigramsDF[1:50000,]$unigrams)
+
+ggplot(data=unigramsDF[1:30,], aes(x=reorder(unigrams, -perc), y=perc)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
 ```
 
 ## Bigram frequencies
 
 Bigram is but a pair of words together in the text. Such combinations will be useful to predict what words will appear next.
 
-```{r}
-allText <- sapply(allCorpus, as.character)
+```{r plotBigrams}
 bigrams <- sapply(allText, tokenize_ngrams, n=2, simplify=FALSE)
 bigrams <- unlist(bigrams, use.names = FALSE)
 bigramsDF <- data.frame(table(bigrams))
@@ -153,11 +155,47 @@ ggplot(data=bigramsDF[1:20,], aes(x=reorder(bigrams, -Freq), y=Freq)) + geom_bar
 ## Trigram frequencies
 
 By analogy with bigrams:
-```{r}
+```{r plotTrigrams}
 trigrams <- sapply(allText, tokenize_ngrams, n=3, simplify=FALSE)
 trigrams <- unlist(trigrams, use.names = FALSE)
 trigramsDF <- data.frame(table(trigrams))
 trigramsDF <- trigramsDF[order(-trigramsDF$Freq),]
 
 ggplot(data=trigramsDF[1:20,], aes(x=reorder(trigrams, -Freq), y=Freq)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('Trigram')
+```
+
+# Modeling
+
+For the purpose of this report I will keep using the original sampling of ~50,000 lines from each file as training set. Further subsamplings of ~10,000 lines from each file will be used as dev and test sets to evaluate the models, and when developing the final product, the entire available dataset of millions of lines will be used for training.
+
+As an initial step, for all the models, I will replace all words not in the dictionary with a special <UNK> token, and recalculate bigram and trigram tables.
+
+```{r replaceUNK}
+bigramsDF$w2 <- word(bigramsDF$bigrams, 2) # get 2nd word to a separate column
+bigramsDF <- bigramsDF[bigramsDF$w2 %in% dict,] # remove bigrams ending with unknown words (not gonna predict <UNK> anyway)
+bigramsDF$w1 <- word(bigramsDF$bigrams, 1) # get 1st word to a separate column
+bigramsDF$w1 <- ifelse(bigramsDF$w1 %in% dict, bigramsDF$w1, '<UNK>') # replace unknown 1st words wtih <UNK>
+bigramsDF %>% group_by(w1, w2) %>% summarise(freq=sum(Freq))  -> bigramsDF
+
+# by analogy for trigrams
+trigramsDF$w3 <- word(trigramsDF$trigrams, 3)
+trigramsDF <- trigramsDF[trigramsDF$w3 %in% dict,]
+trigramsDF$w1 <- word(trigramsDF$trigrams, 1)
+trigramsDF$w2 <- word(trigramsDF$trigrams, 2)
+trigramsDF$w1 <- ifelse(trigramsDF$w1 %in% dict, trigramsDF$w1, '<UNK>')
+trigramsDF$w2 <- ifelse(trigramsDF$w2 %in% dict, trigramsDF$w2, '<UNK>')
+trigramsDF %>% group_by(w1, w2, w3) %>% summarise(freq=sum(Freq))  -> trigramsDF
+```
+
+## Model 1: 3>2>1
+
+This model:
+
+1. Tries to find a matching trigram beginning (i.e. two words) and predicts the most probable third
+2. If there is no match, tries to find a matching bigram beginning (i.e. just one word) and predicts the most probable second one
+3. If all else fails, predicts the most common unigram (which happens to be the word "the")
+
+```{r}
+# For each word in the dictionary, find the most frequent bigram that starts with it
+
 ```

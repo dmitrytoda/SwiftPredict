@@ -32,7 +32,17 @@ createSample <- function(infile, outfile, lines=50000, block=100){
         close(out.con)
 }
 
-# Create ~50,000 line samples for each of the en_US original files
+# Create ~50,000 line train samples for each of the en_US original files
 createSample('./data/en_US/en_US.twitter.txt', './data/en_US/sample.twitter.txt')
 createSample('./data/en_US/en_US.blogs.txt', './data/en_US/sample.blogs.txt')
 createSample('./data/en_US/en_US.news.txt', './data/en_US/sample.news.txt')
+
+# Create ~10,000 line dev samples for each of the en_US original files
+createSample('./data/en_US/en_US.twitter.txt', './data/en_US/dev.twitter.txt', lines=10000, block=20)
+createSample('./data/en_US/en_US.blogs.txt', './data/en_US/dev.blogs.txt', lines=10000, block=20)
+createSample('./data/en_US/en_US.news.txt', './data/en_US/dev.news.txt', lines=10000, block=20)
+
+# Create ~10,000 line test samples for each of the en_US original files
+createSample('./data/en_US/en_US.twitter.txt', './data/en_US/test.twitter.txt', lines=10000, block=20)
+createSample('./data/en_US/en_US.blogs.txt', './data/en_US/test.blogs.txt', lines=10000, block=20)
+createSample('./data/en_US/en_US.news.txt', './data/en_US/test.news.txt', lines=10000, block=20)
