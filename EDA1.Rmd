@@ -105,6 +105,7 @@ unigrams <- unlist(unigrams, use.names = FALSE)
 unigramsDF <- data.frame(table(unigrams))
 unigramsDF <- unigramsDF[order(-unigramsDF$Freq),]
 rownames(unigramsDF) <- NULL
+unigramsDF$unigrams <- as.character(unigramsDF$unigrams)
 
 unigramsDF$perc <- unigramsDF$Freq / sum(unigramsDF$Freq)
 unigramsDF$cumpercentage <- cumsum(unigramsDF$perc)
@@ -195,7 +196,36 @@ This model:
 2. If there is no match, tries to find a matching bigram beginning (i.e. just one word) and predicts the most probable second one
 3. If all else fails, predicts the most common unigram (which happens to be the word "the")
 
-```{r}
-# For each word in the dictionary, find the most frequent bigram that starts with it
+```{r model1}
+# For all bigrams that start with the same word, leave only the most frequent one
+bigramsDF %>% arrange(w1, desc(freq)) %>% group_by(w1) %>% slice(1) -> m1_bi
 
+# For all trigrams that start with the same 2 word, leave only the top row
+trigramsDF$w12 <- paste(trigramsDF$w1, trigramsDF$w2)
+trigramsDF %>% arrange(w12, desc(freq)) %>% group_by(w12) %>% slice (1) -> m1_tri
+
+
+m1_predict <- function(x) {
+        # preprocess the same way as training data
+    x <- removeNumbers(x)
+    x <- removeRT(x)
+    x <- removeForeign(x)
+    x <- removePunctuation(x, preserve_intra_word_contractions=TRUE, preserve_intra_word_dashes=TRUE)
+    x <- stripWhitespace(x)
+    x <- tolower(x)
+    tokens <- unlist(tokenize_words(x))
+    
+    
+    if (length(tokens)==0) # no input
+            return(unigramsDF[1,'unigrams'])
+    else if(length(tokens)==1) { # input is 1 word; we'll always find either the exact match or <UNK>
+            if (!tokens %in% dict) tokens <- '<UNK>'
+                    return(m1_bi[m1_bi$w1==tokens,]$w2)
+    }
+    else # input is 2+ words
+            tokens <- tokens[(length(tokens)-1):length(tokens)]
+            tokens <- sapply(tokens, function(x) ifelse(x %in% dict, x, '<UNK>'))
+            #tokens
+            m1_tri[m1_tri$w1==tokens[1] & m1_tri$w2==tokens[2],]$w3
+}
 ```
