@@ -215,17 +215,19 @@ m1_predict <- function(x) {
     x <- tolower(x)
     tokens <- unlist(tokenize_words(x))
     
+    # replace all unknown words with <UNK>
+    tokens <- sapply(tokens, function(x) ifelse(x %in% dict, x, '<UNK>'))
     
     if (length(tokens)==0) # no input
             return(unigramsDF[1,'unigrams'])
-    else if(length(tokens)==1) { # input is 1 word; we'll always find either the exact match or <UNK>
-            if (!tokens %in% dict) tokens <- '<UNK>'
-                    return(m1_bi[m1_bi$w1==tokens,]$w2)
-    }
-    else # input is 2+ words
-            tokens <- tokens[(length(tokens)-1):length(tokens)]
-            tokens <- sapply(tokens, function(x) ifelse(x %in% dict, x, '<UNK>'))
-            #tokens
-            m1_tri[m1_tri$w1==tokens[1] & m1_tri$w2==tokens[2],]$w3
+    
+    # input is 1 word: will always find a match in bigrams table (maybe <UNK>)
+    else if(length(tokens)==1) return(m1_bi[m1_bi$w1==tokens,]$w2)
+    
+    # else: input is 2+ words
+    tokens <- tokens[(length(tokens)-1):length(tokens)]
+    res <- m1_tri[m1_tri$w1==tokens[1] & m1_tri$w2==tokens[2],]$w3
+    if(length(res)>0) return(res) # found exact match in trigrams
+    return(m1_bi[m1_bi$w1==tokens[2],]$w2) # bigram prediction by last word
 }
 ```
