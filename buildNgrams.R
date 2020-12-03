@@ -11,9 +11,25 @@ train.tokens <- tokens(
         remove_separators = TRUE,
         split_hyphens = FALSE,
         include_docvars = FALSE,
-        padding = FALSE,
-        verbose = quanteda_options("verbose")
+        padding = FALSE
 )
+
+# keep only tokens that contain at least one letter
+train.tokens <- tokens_select(
+        train.tokens, 
+        "[a-z]+", 
+        valuetype = "regex", 
+        selection = "keep",  
+        case_insensitive = TRUE)
+
+# remove tokens that contain weird characters,
+# i.e. anything but letters, digits and #'.-’ signs
+train.tokens <- tokens_select(
+        train.tokens, 
+        "[^\\#a-z0-9\\'\\.\\-]+", 
+        valuetype = "regex", 
+        selection = "remove",  
+        case_insensitive = TRUE)
 
 nFreq <- function(n, my_tokens) {
         print(paste("Calculating", n, "grams"))
@@ -24,4 +40,3 @@ nFreq <- function(n, my_tokens) {
 }
 
 ngrams <- lapply(1:6, nFreq, train.tokens)
-
