@@ -1,0 +1,15 @@
+---
+title: "SwiftPredict plan"
+output: html_notebook
+---
+
+1. corp_dict.R
+        + uses files2sentences() to create a corpus split into one-sentence documents from several files
+        + tokenizes it into words
+        + removes weird words
+        + creates unigram frequency table that can be used for EDA and to define dictionary
+        + creates dict as character vector
+2. buildNgrams.R
+        + creates a list 1-6-gram frequency tables, using clean set of tokens (takes a while)
+        + replaces out-of-dictionary words with <UNK>
+        + recalculates all n-gram frequencies

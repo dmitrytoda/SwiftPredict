@@ -14,9 +14,6 @@ library(scales)
 # Plot word coverage
 
 ```{r word_coverage}
-words <- ngrams[[1]]
-words$perc <- words$frequency / sum(words$frequency)
-words$cumperc <- cumsum(words$perc)
 cover <- vector(mode = 'integer')
 cover["50"] <- min(which(words$cumperc>=.5))
 cover["90"] <- min(which(words$cumperc>=.9))
@@ -38,8 +35,8 @@ ggplot(data=words, aes(x=as.integer(rownames(words)), y=cumperc)) + geom_point(c
 # Choose dictionary and plot top words
 
 ```{r dict}
-dict_size <- 50000
 dict_cover <- words[dict_size,]$cumperc
 
 ggplot(data=words[1:30,], aes(x=reorder(feature, -perc), y=perc)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
 ```
+

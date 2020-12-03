@@ -1,42 +1,41 @@
-train.corpus <- files2sentences(c('./data/en_US/sample.twitter.txt'
-                                  , './data/en_US/sample.blogs.txt'
-                                  , './data/en_US/sample.news.txt'))
-train.tokens <- tokens(
-        train.corpus,
-        what = "word",
-        remove_punct = TRUE,
-        remove_symbols = TRUE,
-        remove_numbers = TRUE,
-        remove_url = TRUE,
-        remove_separators = TRUE,
-        split_hyphens = FALSE,
-        include_docvars = FALSE,
-        padding = FALSE
-)
+ngrams <- lapply(1:6, nFreq, train.tokens)
 
-# keep only tokens that contain at least one letter
-train.tokens <- tokens_select(
-        train.tokens, 
-        "[a-z]+", 
-        valuetype = "regex", 
-        selection = "keep",  
-        case_insensitive = TRUE)
-
-# remove tokens that contain weird characters,
-# i.e. anything but letters, digits and #'.-’ signs
-train.tokens <- tokens_select(
-        train.tokens, 
-        "[^\\#a-z0-9\\'\\.\\-]+", 
-        valuetype = "regex", 
-        selection = "remove",  
-        case_insensitive = TRUE)
-
-nFreq <- function(n, my_tokens) {
-        print(paste("Calculating", n, "grams"))
-        my_ngrams <- tokens_ngrams(my_tokens, n, concatenator = " ")
-        my_ngrams <- dfm(my_ngrams)
-        my_ngrams <- textstat_frequency(my_ngrams)
-        my_ngrams[,1:2]
+# input: n-gram frequency table as data frame
+# output: same data frame with out-of-dictionary words
+# replaced by <UNK> and collapsed together, with each word in its own column as factor
+library(dplyr)
+removeOOD <- function(df) {
+        print("Calling removeOOD")
+        
+        # get a separate data frame with one column per word (as factors)
+        split_words <- data.frame(do.call('rbind', strsplit(df$feature,' ',fixed=TRUE)))
+        
+        # loop over columns
+        for (i in colnames(split_words)) {
+                cur_col <- split_words[,i] 
+                levels(cur_col) <- c(levels(cur_col), '<UNK>') # add <UNK> level
+                cur_col[! cur_col %in% dict] <- '<UNK>' # replace OOD words with <UNK>
+                cur_col <- droplevels(cur_col)
+                cur_col -> split_words[,i]
+        }
+        
+        # a DF with each word in its column and frequency as the last one
+        result <- cbind(split_words, df$frequency)
+        colnames(result)[ncol(result)] <- 'frequency'
+        
+        # remove n-grams where last word in <UNK>
+        result <- result[result[,ncol(result)-1] != '<UNK>',]
+        
+        # collapse all rows that have the same n-gram (as many OOD words were mapped to the same <UNK> token)
+        result %>% 
+                group_by_at(colnames(split_words)) %>% 
+                summarise(frequency=sum(frequency)) %>%
+                arrange(desc(frequency))
 }
 
-ngrams <- lapply(1:6, nFreq, train.tokens)
+tidy_ngrams <- lapply(ngrams, removeOOD)
+colnames(tidy_ngrams[[1]])[1] <- 'X1' # removeOOD produces a weird column name for unigrams
+
+
+       
+        
