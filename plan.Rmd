@@ -13,3 +13,5 @@ output: html_notebook
         + creates a list 1-6-gram frequency tables, using clean set of tokens (takes a while)
         + replaces out-of-dictionary words with <UNK>
         + recalculates all n-gram frequencies
+3. Katz.R
+        + estimates probability of a n-gram, given frequency table

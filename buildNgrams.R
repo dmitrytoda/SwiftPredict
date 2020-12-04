@@ -24,7 +24,9 @@ removeOOD <- function(df) {
         colnames(result)[ncol(result)] <- 'frequency'
         
         # remove n-grams where last word in <UNK>
-        result <- result[result[,ncol(result)-1] != '<UNK>',]
+        # except in unigrams
+        if(ncol(result) > 2)
+                result <- result[result[,ncol(result)-1] != '<UNK>',]
         
         # collapse all rows that have the same n-gram (as many OOD words were mapped to the same <UNK> token)
         result %>% 
