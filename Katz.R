@@ -1,23 +1,68 @@
+# creates a condition that looks like X1=='i' & ... & X3=='you'
+my_cond <- function(ngram) {
+        cond <- ""
+        for (i in 1:length(ngram)) cond <- paste0(cond, " & X", i, "=='", ngram[i], "'")
+        parse(text=substring(cond, 4))
+}
+
+
+
+# finds ngram in a frequency tables list
+# if res = "bool", returns TRUE/FALSE
+# if res = "count", returns absolute frequency
+# if res = "perc", returns frequency as percentage (0..1)
+find_ngram <- function(ngram, res="count", freqs=dt_ngrams) {
+        n <- length(ngram)
+        stopifnot(is.character(ngram), n<=max_n, n>0, 
+                  res %in% c('bool', 'count', 'perc'))
+        
+        cond <- my_cond(ngram)
+        
+        # checks if there are rows in the corresponding table
+        observed <- freqs[[n]][eval(cond), .N]>0
+        
+        # return TRUE/FALSE
+        if (res=='bool') return(observed)
+        
+        # count and perc should only work with observed ngrams
+        stopifnot(observed)
+        
+        # return absolute count
+        count <- freqs[[n]][eval(cond), frequency]
+        if (res=='count') return(count)
+        
+        # finally, return count percentage
+        count / sum(freqs[[n]][,frequency])
+}
+
+
 # calculates the probability of a ngram
 # given a frequency table
-# ngram should be a character vector (6 elements or less)
+# ngram should be a character vector of length 2..max_n (no sense in calculating KBO for unigrams)
 # already preprocessed to tokens like in freqs (with <UNK>)
 # freqs should be a list of observed ngram frequencies
 # disc is absolute discount
-katz_prob <- function(ngram, freqs=tidy_ngrams, disc=0.5) {
-        stopifnot(is.character(ngram), length(ngram)<=6, length(ngram)>0)
+katz_prob <- function(ngram, freqs=dt_ngrams, disc=0.5) {
+        n <- length(ngram)
+        stopifnot(is.character(ngram), n<=max_n, n>=2)
         
-        # for unigram, just  return its frequency percentage
-        if(length(ngram)==1) {
-                unigrams <- freqs[[1]]
-                return(unigrams[unigrams$X1==ngram,]$frequency / sum(unigrams$frequency))
-        }
-
         # if observed, return c*(this ngram) / c(the beginning of ngram)
+        if(find_ngram(ngram, "bool"))
+                return((find_ngram(ngram)-disc) / find_ngram(ngram[1:n-1]))
         
+        # if unobserved
+        
+        # find observed ngrams that start with the same n-1 words
+        cond <- my_cond(ngram[1:n-1])
+        freqs[[n]][eval(cond)]
 }
 
 
 katz_prob(c("<UNK>", "123"))
 
-katz_prob(c("i", "love", "you"))
+katz_prob(c("i", "love", "hui"))
+
+katz_prob("<UNK>")
+
+find_ngram(c("i", "love", "you"), res="count", freqs = dt_ngrams)
+find_ngram(c("i", "love"), res="count", freqs = dt_ngrams)
