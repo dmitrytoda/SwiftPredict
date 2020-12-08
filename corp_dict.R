@@ -1,35 +1,7 @@
 train.corpus <- files2sentences(c('./data/en_US/sample.twitter.txt'
                                   , './data/en_US/sample.blogs.txt'
                                   , './data/en_US/sample.news.txt'))
-train.tokens <- tokens(
-        train.corpus,
-        what = "word",
-        remove_punct = TRUE,
-        remove_symbols = TRUE,
-        remove_numbers = TRUE,
-        remove_url = TRUE,
-        remove_separators = TRUE,
-        split_hyphens = FALSE,
-        include_docvars = FALSE,
-        padding = FALSE
-)
-
-# keep only tokens that contain at least one letter
-train.tokens <- tokens_select(
-        train.tokens, 
-        "[a-z]+", 
-        valuetype = "regex", 
-        selection = "keep",  
-        case_insensitive = TRUE)
-
-# remove tokens that contain weird characters,
-# i.e. anything but letters, digits and #'.-’ signs
-train.tokens <- tokens_select(
-        train.tokens, 
-        "[^\\#a-z0-9\\'\\.\\-]+", 
-        valuetype = "regex", 
-        selection = "remove",  
-        case_insensitive = TRUE)
+train.tokens <- str2tokens(train.corpus)
 
 # function to create n-gram frequency table
 nFreq <- function(n, my_tokens) {

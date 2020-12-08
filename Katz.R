@@ -1,7 +1,7 @@
 # creates a condition that looks like X1=='i' & ... & X3=='you'
 my_cond <- function(ngram) {
-        cond <- ""
-        for (i in 1:length(ngram)) cond <- paste0(cond, " & X", i, "=='", ngram[i], "'")
+        cond <- ''
+        for (i in 1:length(ngram)) cond <- paste0(cond, ' & X', i, '=="', ngram[i], '"')
         parse(text=substring(cond, 4))
 }
 
@@ -46,21 +46,32 @@ katz_prob <- function(ngram, freqs=dt_ngrams, disc=0.5) {
         n <- length(ngram)
         stopifnot(is.character(ngram), n<=max_n, n>=2)
         
-        # if observed, return c*(this ngram) / c(the beginning of ngram)
+        # if OBSERVED, return c*(this ngram) / c(the beginning of ngram)
         if(find_ngram(ngram, "bool"))
                 return((find_ngram(ngram)-disc) / find_ngram(ngram[1:n-1]))
         
-        # if unobserved
+        # if UNOBSERVED
         
         # find observed ngrams that start with the same n-1 words
         cond <- my_cond(ngram[1:n-1])
-        freqs[[n]][eval(cond)]
+        
+        # alpha is the probability mass moved by discounting 
+        # from observed to unobserved ngrams starting with the same n-1 words
+        alpha <- 1 - sum(
+                (freqs[[n]][eval(cond), frequency]-disc) / find_ngram(ngram[1:n-1])) 
+        
+        # alpha has to be distributed between all possible unobserved tails
+        # in proportion to tail frequency (among unobserved tails only)
+        alpha * find_ngram(ngram[n]) / 
+                sum(freqs[[1]][!.(freqs[[n]][eval(cond), ..n]), frequency])
+        
 }
 
+katz_prob(c("i", "hui"))
 
 katz_prob(c("<UNK>", "123"))
 
-katz_prob(c("i", "love", "hui"))
+
 
 katz_prob("<UNK>")
 
