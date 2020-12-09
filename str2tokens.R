@@ -36,5 +36,8 @@ str2tokens <- function(string, res='tokens') {
                 case_insensitive = TRUE)
         
         if(res=='tokens') return(my_tokens)
-        tolower(my_tokens[[1]])
+        
+        res <- tolower(my_tokens[[1]])
+        res[! res %in% dict] <- '<UNK>'
+        res
 }

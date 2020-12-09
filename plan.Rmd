@@ -6,8 +6,7 @@ output: html_notebook
 1. corp_dict.R
 
         + uses files2sentences() to create a corpus split into one-sentence documents from several files
-        + tokenizes it into words
-        + removes weird words
+        + tokenizes it into words using str2tokens() that also does some cleaning (remove numbers, weird words etc)
         + creates unigram frequency table that can be used for EDA and to define dictionary
         + creates dict as character vector
 2. buildNgrams.R
@@ -21,4 +20,4 @@ output: html_notebook
         + find_ngram() is also a helper function that tells whether a ngram is observed, and if yes, then its count or percentage
         + estimates probability of a n-gram, given frequency table:
                 + for observed ngrams, returns c*/c 
-                + for unobserved ngrams,...
+                + for unobserved ngrams, alpha * MLE(tail word)

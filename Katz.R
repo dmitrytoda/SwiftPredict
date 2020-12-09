@@ -35,45 +35,93 @@ find_ngram <- function(ngram, res="count", freqs=dt_ngrams) {
         count / sum(freqs[[n]][,frequency])
 }
 
-
-# calculates the probability of a ngram
-# given a frequency table
-# ngram should be a character vector of length 2..max_n (no sense in calculating KBO for unigrams)
-# already preprocessed to tokens like in freqs (with <UNK>)
-# freqs should be a list of observed ngram frequencies
-# disc is absolute discount
-katz_prob <- function(ngram, freqs=dt_ngrams, disc=0.5) {
-        n <- length(ngram)
+# returns a character vector of all unobserved tail words 
+# for a given ngram
+B <- function(ngram, freqs=dt_ngrams, dic=dict) {
+        n <- length(ngram)+1
         stopifnot(is.character(ngram), n<=max_n, n>=2)
         
-        # if OBSERVED, return c*(this ngram) / c(the beginning of ngram)
-        if(find_ngram(ngram, "bool"))
+        cond <- my_cond(ngram)
+        observed_tails <- freqs[[n]][eval(cond)][[n]]
+        dic[!dic %in% observed_tails]
+}
+
+# returns KBO probabilities of unobserved ngrams 
+# that start with the provided ngram and end with words from B_words
+B_probs <- function(B_words, ngram, freqs=dt_ngrams) {
+        probs <- sapply(B_words, function(x) kbo(c(ngram, x)))
+        data.table(start=paste(ngram, collapse=' '), end=B_words, prob=probs)
+}
+
+testng <- c('i')
+b_words <- B(testng)
+temp <- B_probs(b_words, testng)
+
+# calculates alpha: probability mass moved from observed
+# (n+1)-grams starting with the given n-gram
+# to unobserved (n+1)-grams
+# if the given ngram is itself unobserved, returns 1
+alpha <- function(ngram, freqs=dt_ngrams, disc=0.5) {
+        n <- length(ngram)+1
+        stopifnot(is.character(ngram), n<=max_n, n>=2)
+        
+        cond <- my_cond(ngram)
+        if(find_ngram(ngram, "bool", freqs=dt_ngrams)) {
+                1 - sum((freqs[[n]][eval(cond), frequency]-disc) / find_ngram(ngram))
+        } else {
+                1
+        }
+}
+
+# calculates the probability that a ngram has the tail it does
+# given a frequency table
+# ngram should be a character vector of length 1..max_n 
+# already preprocessed to tokens like in freqs (with <UNK>)
+# freqs should be a list of observed ngram frequencies
+# disc is absolute discount (same for all levels of n)
+kbo <- function(ngram, freqs=dt_ngrams, disc=0.5) {
+        n <- length(ngram)
+        stopifnot(is.character(ngram), n<=max_n, n>=1)
+        
+        ### PART 1: unigrams - return MLE
+        if(n==1) {
+                return(find_ngram(ngram, "perc", freqs))
+        }
+        
+        ### PART 2: 2+grams
+        ## 2A: if OBSERVED, return c*(this ngram) / c(the beginning of ngram)
+        if(find_ngram(ngram, "bool", freqs)) {
+                print(paste('Observed:', paste(ngram, collapse=' ')))
                 return((find_ngram(ngram)-disc) / find_ngram(ngram[1:n-1]))
+        }
         
-        # if UNOBSERVED
-        
+        ## 2B: if UNOBSERVED
+        print(paste("Unobserved:", paste(ngram, collapse = ' ')))
         # find observed ngrams that start with the same n-1 words
-        cond <- my_cond(ngram[1:n-1])
+        my_alpha <- alpha(ngram[1:n-1], freqs, disc)
+        my_B <- B(ngram[1:n-1], freqs)
         
-        # alpha is the probability mass moved by discounting 
-        # from observed to unobserved ngrams starting with the same n-1 words
-        alpha <- 1 - sum(
-                (freqs[[n]][eval(cond), frequency]-disc) / find_ngram(ngram[1:n-1])) 
+        # 2Bi: unobserved BIgram: return alpha, distributed over 
+        # all B-words according to their MLE (within B)
+        if(n==2) {
+                # unobserved unigram frequencies corresponding to B-words
+                return(my_alpha *  
+                               freqs[[1]][.(ngram[n]), frequency] / 
+                               sum(freqs[[1]][.(my_B),frequency]))
+        }
         
-        # alpha has to be distributed between all possible unobserved tails
-        # in proportion to tail frequency (among unobserved tails only)
-        alpha * find_ngram(ngram[n]) / 
-                sum(freqs[[1]][!.(freqs[[n]][eval(cond), ..n]), frequency])
+        # 2Bii: unobserved 3+gram: return alpha, distributed over
+        # all B-words according to KBO of (n-1)-grams
+        
         
 }
 
-katz_prob(c("i", "hui"))
+kbo("<UNK>")
 
-katz_prob(c("<UNK>", "123"))
+kbo(c('i', 'love'))
 
+kbo(c("i", "hui"))
 
+kbo(c("you", "my", 'dear', 'lily', '<UNK>'))
 
-katz_prob("<UNK>")
-
-find_ngram(c("i", "love", "you"), res="count", freqs = dt_ngrams)
-find_ngram(c("i", "love"), res="count", freqs = dt_ngrams)
+          
