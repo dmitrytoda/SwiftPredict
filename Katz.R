@@ -1,11 +1,12 @@
-# creates a condition that looks like X1=='i' & ... & X3=='you'
+library(quanteda)
+library(data.table)
+# creates a condition that looks like .(ngram[1], ngram[2],.., ngram[n])
 my_cond <- function(ngram) {
-        cond <- ''
-        for (i in 1:length(ngram)) cond <- paste0(cond, ' & X', i, '=="', ngram[i], '"')
-        parse(text=substring(cond, 4))
+        cond <- ".("
+        for (i in 1:length(ngram)) cond <- paste0(cond, "ngram[", i, "],")
+        substr(cond, nchar(cond), nchar(cond)) <- ")"
+        parse(text=cond)
 }
-
-
 
 # finds ngram in a frequency tables list
 # if res = "bool", returns TRUE/FALSE
@@ -18,17 +19,16 @@ find_ngram <- function(ngram, res="count", freqs=dt_ngrams) {
         
         cond <- my_cond(ngram)
         
-        # checks if there are rows in the corresponding table
-        observed <- freqs[[n]][eval(cond), .N]>0
+        # get count of this ngram; if unobserved, it will be NA
+        count <- freqs[[n]][eval(cond), frequency]
         
         # return TRUE/FALSE
-        if (res=='bool') return(observed)
+        if (res=='bool') return(!is.na(count))
         
         # count and perc should only work with observed ngrams
-        stopifnot(observed)
+        stopifnot(!is.na(count))
         
         # return absolute count
-        count <- freqs[[n]][eval(cond), frequency]
         if (res=='count') return(count)
         
         # finally, return count percentage
@@ -53,9 +53,9 @@ B_probs <- function(B_words, ngram, freqs=dt_ngrams) {
         data.table(start=paste(ngram, collapse=' '), end=B_words, prob=probs)
 }
 
-testng <- c('i')
-b_words <- B(testng)
-temp <- B_probs(b_words, testng)
+testNG <- c('i')
+b_words <- B(testNG)
+temp <- B_probs(b_words, testNG)
 
 # calculates alpha: probability mass moved from observed
 # (n+1)-grams starting with the given n-gram
@@ -67,7 +67,7 @@ alpha <- function(ngram, freqs=dt_ngrams, disc=0.5) {
         
         cond <- my_cond(ngram)
         if(find_ngram(ngram, "bool", freqs=dt_ngrams)) {
-                1 - sum((freqs[[n]][eval(cond), frequency]-disc) / find_ngram(ngram))
+                1 - sum((freqs[[n]][eval(cond), frequency]-disc)) / find_ngram(ngram)
         } else {
                 1
         }
@@ -113,15 +113,29 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5) {
         # 2Bii: unobserved 3+gram: return alpha, distributed over
         # all B-words according to KBO of (n-1)-grams
         
+        if(n==3) {
+                # my_B are unobserved tails X coming after w1_w2_X
+                # they are further subdivided into A2 and B2
+                # depending on whether just w2_X is observed
+                B2 <- B(ngram[2], freqs, my_B)
+                A2 <- my_B[! my_B %in% B2]
+                
+                A2_probs <- 
+                
+        }
+        
         
 }
 
-kbo("<UNK>")
+temp <- kbo(c('i', 'love', 'hui'))
 
-kbo(c('i', 'love'))
+kbo(c('i', 'love', 'you'))
 
-kbo(c("i", "hui"))
+kbo(c('love', 'hui'))
 
-kbo(c("you", "my", 'dear', 'lily', '<UNK>'))
+temp <- kbo(c("i", "love", "hui"))
+temp
 
+temp <- kbo(c("you", "my", 'dear', 'lily', '<UNK>'))
+temp
           
