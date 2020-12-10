@@ -122,13 +122,14 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
                 # combinations starter_B2 are UNobserved
                 # probabilities for both of them are returned
                 # by bi_probs2()
-                cond <- my_cond(starter)
-                return(freqs[[length(starter)+1]][eval(cond)])
+                
+                # cond <- my_cond(starter)
+                # return(freqs[[length(starter)+1]][eval(cond)])
                 
                 # prob = alpha * numerator / denominator
                 numerator <- kbo(starter, freqs = freqs, disc = disc, dict = dict)
                 # Bgrams <- lapply(my_B, function(x) c(ngram[2:(n-1)], x))
-                denominator <- sum(bi_probs2(ngram[2:(n-1)], A2, B2, freqs=freqs, disc=disc, dict=dict))
+                denominator <- sum(bi_probs2(starter, A2, B2, freqs=freqs, disc=disc, dict=dict))
                 my_alpha * numerator / denominator
         }
         
@@ -141,9 +142,12 @@ bi_probs <- function (bigrams, freqs=freqs, disc, dict) {
 
 bi_probs2 <- function (starter, A, B, freqs, disc, dict) {
         # probabilities of observed bigrams A
-        starter_A <- lapply(A, function(x) c(starter, x))
-        a_probs <- sapply(starter_A, kbo, freqs, disc, dict)
+        # starter_A <- lapply(A, function(x) c(starter, x))
+        # a_probs <- sapply(starter_A, kbo, freqs, disc, dict)
         
+        cond <- my_cond(starter)
+        obs_freqs <- freqs[[length(starter)+1]][eval(cond)]
+        a_probs <- (obs_freqs$frequency-disc) / sum(obs_freqs$frequency)
         
         # probabilities of unobserved bigrams B
         bi_alpha <- alpha(starter, freqs, disc)
