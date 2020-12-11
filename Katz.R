@@ -47,12 +47,6 @@ B <- function(ngram, freqs=dt_ngrams, dict=dict50) {
         dict[!dict %in% observed_tails]
 }
 
-# returns KBO probabilities of unobserved ngrams 
-# that start with the provided ngram and end with words from B_words
-B_probs <- function(B_words, ngram, freqs=dt_ngrams) {
-        probs <- sapply(B_words, function(x) kbo(c(ngram, x)))
-        data.table(start=paste(ngram, collapse=' '), end=B_words, prob=probs)
-}
 
 # calculates alpha: probability mass moved from observed
 # (n+1)-grams starting with the given n-gram
@@ -93,7 +87,7 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
         }
         
         ## 2B: if UNOBSERVED
-        print(paste("Unobserved:", paste(ngram, collapse = ' ')))
+        # print(paste("Unobserved:", paste(ngram, collapse = ' ')))
         # find observed ngrams that start with the same n-1 words
         my_alpha <- alpha(ngram[1:(n-1)], freqs, disc)
         my_B <- B(ngram[1:(n-1)], freqs, dict=dict)
@@ -118,7 +112,6 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
                 B2 <- B(starter, freqs, my_B)
                 A2 <- my_B[! my_B %in% B2]
                 
-                
                 # combinations starter_A2 are observed
                 # combinations starter_B2 are UNobserved
                 # probabilities for both of them are returned
@@ -128,9 +121,10 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
                 numerator <- kbo(ngram[2:n], freqs = freqs, disc = disc, dict = dict)
                 denominator <- sum(bi_probs2(starter, A2, B2, freqs=freqs, disc=disc, dict=dict))
                 my_alpha * numerator / denominator
+        } else {
+                simpleError("Tried to calculate a probability of 4+gram")
+                stop()
         }
-        
-        
 }
 
 bi_probs <- function (bigrams, freqs=freqs, disc, dict) {
@@ -139,9 +133,6 @@ bi_probs <- function (bigrams, freqs=freqs, disc, dict) {
 
 bi_probs2 <- function (starter, A, B, freqs, disc, dict) {
         # probabilities of observed bigrams A
-        # starter_A <- lapply(A, function(x) c(starter, x))
-        # a_probs <- sapply(starter_A, kbo, freqs, disc, dict)
-        
         cond <- my_cond(starter)
         obs_freqs <- freqs[[length(starter)+1]][eval(cond)]
         a_probs <- (obs_freqs[.(starter, A)]$frequency-disc) / sum(obs_freqs$frequency)

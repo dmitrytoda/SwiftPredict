@@ -36,6 +36,7 @@ toy.ngrams <- lapply(1:4, nFreq, toy.tokens)
 toy.ngrams <- lapply(toy.ngrams, removeOOD)
 toy.ngrams <- lapply(toy.ngrams, setDT)
 lapply(toy.ngrams, function(x) setkeyv(x, colnames(x)[1:length(colnames(x))-1]))
+colnames(toy.ngrams[[1]])[1] <- 'X1'
 ```
         
 3. Katz.R
