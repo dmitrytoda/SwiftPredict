@@ -15,7 +15,7 @@ my_cond <- function(ngram) {
 # if res = "perc", returns frequency as percentage (0..1)
 find_ngram <- function(ngram, res="count", freqs=dt_ngrams) {
         n <- length(ngram)
-        stopifnot(is.character(ngram), n<=max_n, n>0, 
+        stopifnot(is.character(ngram), n<=length(dt_ngrams), n>0, 
                   res %in% c('bool', 'count', 'perc'))
         
         cond <- my_cond(ngram)
@@ -40,7 +40,7 @@ find_ngram <- function(ngram, res="count", freqs=dt_ngrams) {
 # for a given ngram
 B <- function(ngram, freqs=dt_ngrams, dict=dict50) {
         n <- length(ngram)+1
-        stopifnot(is.character(ngram), n<=max_n, n>=2)
+        stopifnot(is.character(ngram), n<=length(dt_ngrams), n>=2)
         
         cond <- my_cond(ngram)
         observed_tails <- freqs[[n]][eval(cond)][[n]]
@@ -54,7 +54,7 @@ B <- function(ngram, freqs=dt_ngrams, dict=dict50) {
 # if the given ngram is itself unobserved, returns 1
 alpha <- function(ngram, freqs=dt_ngrams, disc=0.5) {
         n <- length(ngram)+1
-        stopifnot(is.character(ngram), n<=max_n, n>=2)
+        stopifnot(is.character(ngram), n<=length(dt_ngrams), n>=2)
         
         cond <- my_cond(ngram)
         if(find_ngram(ngram, "bool", freqs=freqs)) {
@@ -72,7 +72,7 @@ alpha <- function(ngram, freqs=dt_ngrams, disc=0.5) {
 # disc is absolute discount (same for all levels of n)
 kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
         n <- length(ngram)
-        stopifnot(is.character(ngram), n<=max_n, n>=1)
+        stopifnot(is.character(ngram), n<=length(dt_ngrams), n>=1)
         
         ### PART 1: unigrams - return MLE
         if(n==1) {
@@ -119,7 +119,7 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
                 
                 # prob = alpha * numerator / denominator
                 numerator <- kbo(ngram[2:n], freqs = freqs, disc = disc, dict = dict)
-                denominator <- sum(bi_probs2(starter, A2, B2, freqs=freqs, disc=disc, dict=dict))
+                denominator <- sum(bi_probs(starter, A2, B2, freqs=freqs, disc=disc, dict=dict))
                 my_alpha * numerator / denominator
         } else {
                 simpleError("Tried to calculate a probability of 4+gram")
@@ -127,11 +127,7 @@ kbo <- function(ngram, freqs=dt_ngrams, disc=0.5, dict=dict50) {
         }
 }
 
-bi_probs <- function (bigrams, freqs=freqs, disc, dict) {
-        sapply(bigrams, kbo, freqs=freqs, disc=disc, dict=dict)
-}
-
-bi_probs2 <- function (starter, A, B, freqs, disc, dict) {
+bi_probs <- function (starter, A, B, freqs, disc, dict) {
         # probabilities of observed bigrams A
         cond <- my_cond(starter)
         obs_freqs <- freqs[[length(starter)+1]][eval(cond)]

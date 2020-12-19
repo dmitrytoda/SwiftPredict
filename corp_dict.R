@@ -5,6 +5,7 @@ train.tokens <- str2tokens(train.corpus)
 
 # function to create n-gram frequency table
 nFreq <- function(n, my_tokens) {
+        print(Sys.time())
         print(paste("Calculating", n, "grams"))
         my_ngrams <- tokens_ngrams(my_tokens, n, concatenator = " ")
         my_ngrams <- dfm(my_ngrams)

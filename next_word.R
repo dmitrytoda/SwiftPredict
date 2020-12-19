@@ -1,7 +1,15 @@
 # based on starter ngram, calculates probabilities for all observed
 # completions of it; if that's not enough to find the top probability,
 # calculates unobserved probabilites one by one until a champion is found
-partial_complete <- function(starter, freqs, disc, dict) {
+partial_complete <- function(starter, freqs, disc, dict, verbose=FALSE) {
+        # if starter is unobserved, shorten it by one word from the left until
+        # an observed one is found
+        while(!find_ngram(starter, res='bool', freqs=freqs)) {
+                if(verbose) print(sprintf("Starter '%s' is UNobserved", paste(starter, collapse = ' ')))
+                starter <- starter[2:length(starter)]
+        }
+        
+        if(verbose) print(sprintf("Starter '%s' is observed", paste(starter, collapse = ' ')))
         cond <- my_cond(starter)
         n <- length(starter)+1
         observed_tails <- as.character(freqs[[n]][eval(cond)][[n]])
@@ -21,12 +29,33 @@ partial_complete <- function(starter, freqs, disc, dict) {
                 i <- i+1
                 res <- rbind(res, this_prob)
                 
-                if(i %% 100 == 0) sprintf("%d: max_prob = %f, remaining prob = %f", i, max(res$prob), 1 - sum(res$prob))
+                if(verbose & i %% 100 == 0) print(sprintf("%d: max_prob = %f, remaining prob = %f", i, max(res$prob), 1 - sum(res$prob)))
         }
         return(res[order(-prob)])
         
 }
 
+# a VERY stupid backoff: neither true probabilities nor scores are calulated
+stupid_predict <- function(starter, freqs, dict) {
+        max_n <- length(freqs)
+        input <- str2tokens(starter, "vector", dict)
+        
+        # for empty starter, predict the 3 most common words
+        if(length(input)==0) return(c('the', 'to', 'end'))
+        
+        # take only max_n-1 last words for prediction
+        if (length(input)>max_n-1) input <- input[(length(input)-max_n+2):length(input)]
+        
+        # shorten the starter until it is found in the ngram tables
+        while(!find_ngram(input, res="bool", freqs=freqs)) {
+                input <- input[2:length(input)]
+        }
+        
+        cond <- my_cond(input)
+        X <- length(input)+1
+        top3 <- freqs[[length(input)+1]][eval(cond)][order(-frequency)][1:3,..X]
+        as.character(unlist(top3))
+}
 
 # predicts next words based on any input string
 next_word <- function(str) {

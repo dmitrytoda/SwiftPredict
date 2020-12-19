@@ -48,3 +48,11 @@ colnames(toy.ngrams[[1]])[1] <- 'X1'
                 + for unobserved ngrams, alpha * MLE(tail word)
 ```{r katz}
 ```
+
+4. next_word.R
+For now, Katz is not used, but stupid backoff is
+        
+        + stupid_predict returns next word based on any string
+        
+5. 
+        

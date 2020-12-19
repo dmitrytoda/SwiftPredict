@@ -1,12 +1,9 @@
-max_n <- 6
-ngrams <- lapply(1:max_n, nFreq, train.tokens)
-
 # input: n-gram frequency table as data frame
 # output: same data frame with out-of-dictionary words
 # replaced by <UNK> and collapsed together, with each word in its own column as factor
 library(dplyr)
 library(data.table)
-removeOOD <- function(df) {
+removeOOD <- function(df, dict) {
         print("Calling removeOOD")
         
         # get a separate data frame with one column per word (as factors)
@@ -36,6 +33,10 @@ removeOOD <- function(df) {
                 summarise(frequency=sum(frequency)) %>%
                 arrange(desc(frequency))
 }
+
+max_n <- 6
+ngrams <- lapply(1:max_n, nFreq, train.tokens)
+
 
 tidy_ngrams <- lapply(ngrams, removeOOD)
 colnames(tidy_ngrams[[1]])[1] <- 'X1' # removeOOD produces a weird column name for unigrams
