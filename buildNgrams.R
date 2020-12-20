@@ -35,9 +35,13 @@ removeOOD <- function(df, dict) {
         
         # collapse all rows that have the same n-gram (as many OOD words were mapped to the same <UNK> token)
         df %>% 
-                group_by_at(colnames(blogs_ngrams5)[1:ncol(blogs_ngrams5)-1]) %>% 
-                summarise(frequency=sum(frequency)) %>%
-                arrange(desc(frequency))
+                group_by_at(colnames(df)[1:ncol(df)-1]) %>% 
+                summarise(frequency=sum(frequency)) # %>%
+                # arrange(desc(frequency))
+        
+        df <- setDT(df)
+        # setkeyv(df, cols=colnames(df)[1:ncol(df)-1])
+        df
 }
 
 # max_n <- 6
