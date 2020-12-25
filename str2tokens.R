@@ -1,9 +1,8 @@
-library(quanteda)
-
 # converts a string into tokens
 # res=tokens returns tokens for further processing
 # res=vector returns a character vector to make predictions upon
 str2tokens <- function(string, res='tokens', dict) {
+        require(quanteda)
         stopifnot(res %in% c('tokens', 'vector'))
         my_tokens <- tokens(
                 string,

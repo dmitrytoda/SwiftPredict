@@ -1,0 +1,233 @@
+---
+title: 'SwiftPredict: data cleaning and frequency analysis'
+author: "Dmitry Dolgov"
+date: "11/24/2020"
+output: 
+        html_document:
+                number_sections: true
+                toc: true
+                toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Load and format data
+
+## Load sampled data
+
+Provided corpora were sampled outside of this notebook by selecting ~50,000 random lines from each file. Here I read the sampled files into memory. Each line may represent several sentences but I chose not to split them because:
+
+1. Default sentence splitters (like the one from qdap package) just think any .!? symbol is end of sentence, and acronyms like U.S.A. and N.Y. (quite common in the news) get split.
+2. The system should be able to predict ngrams crossing sentence boundaries as well (a previous sentence is often a good indicator of what the next sentence will be about, or will start with).
+
+```{r load, message=FALSE}
+library(tm)
+library(slam)
+library(ggplot2)
+library(scales)
+library(tokenizers)
+library(stringr)
+library(dplyr)
+
+twitter <- readLines('./data/en_US/sample.twitter.txt', skipNul = TRUE)
+blogs <- readLines('./data/en_US/sample.blogs.txt', skipNul = TRUE)
+news <- readLines('./data/en_US/sample.news.txt', skipNul = TRUE)
+
+twitter <- enc2utf8(twitter)
+blogs <- enc2utf8(blogs)
+news <- enc2utf8(news)
+all <- c(twitter, blogs, news)
+remove(twitter, blogs, news)
+```
+
+Each of the three variables is a character vector with ~50,000 elements, each element representing a line of the initial file (a tweet, a blog post or a news article), possibly containing several sentences.
+
+## Remove profanity words
+
+I chose not to remove profanity words at this stage, as some users actually employ them and may want them to be predicted. On a later stage, when developing an app, I will include it as a check-box kind of option: if a user so desires, profanity words will be excluded from predictions. Also, removing them now would create unnatural n-grams, e.g. if the initial sentence was "what the <profanity> is this?!", then after removing we'll get "what the is this?!", and the system will potentially learn that "the is" is a valid 2-gram, which it is not.
+
+## Creating corpora and cleaning
+
+R tm (text mining) package works with a special class called Corpus. Here I transform raw texts to this format and do the following cleaning:
+
+1. Remove numbers
+2. Remove 'RT' (meaning re-tweet)
+3. Remove punctuation (note that this will also collapse things like U.S.A. into USA which is also a valid spelling)
+4. Remove extra white spaces
+5. Convert everything to lower case
+
+I do not remove "stop words" which include such frequent words as I, a, the etc. These words will have to be predicted as they are in fact the most common ones people type. 
+
+```{r createCorpora, warning=FALSE}
+allCorpus <- Corpus(VectorSource(all), readerControl = list(language = "UTF-8"))
+
+removeRT <- function(corpus) {
+  gsub("RT","", corpus)
+}
+
+# removes all words that contain anything except letters and numbers
+removeForeign <- function(corpus) {
+  gsub(pattern = "[a-zA-Z0-9]*[^a-zA-Z0-9\\&\\-'’\\s]+[a-zA-Z0-9]*",
+       replacement='',
+       x=corpus, 
+       ignore.case = TRUE,
+       perl = TRUE)
+}
+
+cleanCorpus <- function(corpus) {
+    corpus <- tm_map(corpus, removeNumbers)
+    corpus <- tm_map(corpus, removeRT)
+    corpus <- tm_map(corpus, removeForeign)
+    corpus <- tm_map(corpus, removePunctuation, preserve_intra_word_contractions=TRUE, preserve_intra_word_dashes=TRUE)
+    corpus <- tm_map(corpus, stripWhitespace)
+    corpus <- tm_map(corpus, tolower)
+    corpus
+}
+
+allCorpus <- cleanCorpus(allCorpus)
+```
+
+# Frequencies analysis
+
+## Word (unigram) frequencies
+
+What are the most common words the data?
+The TermDocumentMatrix from tm package allows to create a very sparse matrix counting the number of times each term (in this case a word, but in later section a bi- or trigram) appears in each document (a line of the original file: a tweet, a blog post etc).
+
+```{r unigrams}
+allText <- sapply(allCorpus, as.character)
+unigrams <- sapply(allText, tokenize_ngrams, n=1, simplify=FALSE)
+unigrams <- unlist(unigrams, use.names = FALSE)
+unigramsDF <- data.frame(table(unigrams))
+unigramsDF <- unigramsDF[order(-unigramsDF$Freq),]
+rownames(unigramsDF) <- NULL
+unigramsDF$unigrams <- as.character(unigramsDF$unigrams)
+
+unigramsDF$perc <- unigramsDF$Freq / sum(unigramsDF$Freq)
+unigramsDF$cumpercentage <- cumsum(unigramsDF$perc)
+
+c50 <- min(which(unigramsDF$cumpercentage>=.5))
+c90 <- min(which(unigramsDF$cumpercentage>=.9))
+c99 <- min(which(unigramsDF$cumpercentage>=.99))
+```
+
+Plot cumulative word percentages. X axis is in logarithmic scale, horizontal lines correspond to 50%, 90% and 99% of text coverage.
+```{r plotPercentageCovered}
+ggplot(data=unigramsDF, aes(x=as.integer(rownames(unigramsDF)), y=cumpercentage)) + geom_point(color='steelblue') + 
+        scale_x_continuous(labels = comma, trans="log10", breaks=c(10, 500, c50, 1000, c90, c99, 100000), minor_breaks = NULL) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        labs(x='Words count', y='Cumulative % covered') +
+        geom_hline(yintercept=.5) + 
+        geom_hline(yintercept=.9) + 
+        geom_hline(yintercept=.99)
+```
+
+How many unique words are needed to cover a certain % of all words?
+
+* 50% - `r c50` (sic!)
+* 90% - `r c90`
+* 95% - `r c99`
+
+Given this, I will use top 50,000 words (unigrams) to create a dictionary that will cover almost 99% of all written text.
+
+```{r frequentWords}
+dict <- as.character(unigramsDF[1:50000,]$unigrams)
+
+ggplot(data=unigramsDF[1:30,], aes(x=reorder(unigrams, -perc), y=perc)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
+```
+
+## Bigram frequencies
+
+Bigram is but a pair of words together in the text. Such combinations will be useful to predict what words will appear next.
+
+```{r plotBigrams}
+bigrams <- sapply(allText, tokenize_ngrams, n=2, simplify=FALSE)
+bigrams <- unlist(bigrams, use.names = FALSE)
+bigramsDF <- data.frame(table(bigrams))
+bigramsDF <- bigramsDF[order(-bigramsDF$Freq),]
+
+ggplot(data=bigramsDF[1:20,], aes(x=reorder(bigrams, -Freq), y=Freq)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('Bigram')
+```
+
+## Trigram frequencies
+
+By analogy with bigrams:
+```{r plotTrigrams}
+trigrams <- sapply(allText, tokenize_ngrams, n=3, simplify=FALSE)
+trigrams <- unlist(trigrams, use.names = FALSE)
+trigramsDF <- data.frame(table(trigrams))
+trigramsDF <- trigramsDF[order(-trigramsDF$Freq),]
+
+ggplot(data=trigramsDF[1:20,], aes(x=reorder(trigrams, -Freq), y=Freq)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('Trigram')
+```
+
+# Modeling
+
+For the purpose of this report I will keep using the original sampling of ~50,000 lines from each file as training set. Further subsamplings of ~10,000 lines from each file will be used as dev and test sets to evaluate the models, and when developing the final product, the entire available dataset of millions of lines will be used for training.
+
+As an initial step, for all the models, I will replace all words not in the dictionary with a special <UNK> token, and recalculate bigram and trigram tables.
+
+```{r replaceUNK}
+bigramsDF$w2 <- word(bigramsDF$bigrams, 2) # get 2nd word to a separate column
+bigramsDF <- bigramsDF[bigramsDF$w2 %in% dict,] # remove bigrams ending with unknown words (not gonna predict <UNK> anyway)
+bigramsDF$w1 <- word(bigramsDF$bigrams, 1) # get 1st word to a separate column
+bigramsDF$w1 <- ifelse(bigramsDF$w1 %in% dict, bigramsDF$w1, '<UNK>') # replace unknown 1st words wtih <UNK>
+bigramsDF %>% group_by(w1, w2) %>% summarise(freq=sum(Freq))  -> bigramsDF
+
+# by analogy for trigrams
+trigramsDF$w3 <- word(trigramsDF$trigrams, 3)
+trigramsDF <- trigramsDF[trigramsDF$w3 %in% dict,]
+trigramsDF$w1 <- word(trigramsDF$trigrams, 1)
+trigramsDF$w2 <- word(trigramsDF$trigrams, 2)
+trigramsDF$w1 <- ifelse(trigramsDF$w1 %in% dict, trigramsDF$w1, '<UNK>')
+trigramsDF$w2 <- ifelse(trigramsDF$w2 %in% dict, trigramsDF$w2, '<UNK>')
+trigramsDF %>% group_by(w1, w2, w3) %>% summarise(freq=sum(Freq))  -> trigramsDF
+```
+
+## Model 1: 3>2>1
+
+This model:
+
+1. Tries to find a matching trigram beginning (i.e. two words) and predicts the most probable third
+2. If there is no match, tries to find a matching bigram beginning (i.e. just one word) and predicts the most probable second one
+3. If all else fails, predicts the most common unigram (which happens to be the word "the")
+
+```{r model1}
+# For all bigrams that start with the same word, leave only the most frequent one
+bigramsDF %>% arrange(w1, desc(freq)) %>% group_by(w1) %>% slice(1) -> m1_bi
+
+# For all trigrams that start with the same 2 word, leave only the top row
+trigramsDF$w12 <- paste(trigramsDF$w1, trigramsDF$w2)
+trigramsDF %>% arrange(w12, desc(freq)) %>% group_by(w12) %>% slice (1) -> m1_tri
+
+
+m1_predict <- function(x) {
+        # preprocess the same way as training data
+    x <- removeNumbers(x)
+    x <- removeRT(x)
+    x <- removeForeign(x)
+    x <- removePunctuation(x, preserve_intra_word_contractions=TRUE, preserve_intra_word_dashes=TRUE)
+    x <- stripWhitespace(x)
+    x <- tolower(x)
+    tokens <- unlist(tokenize_words(x))
+    
+    # replace all unknown words with <UNK>
+    tokens <- sapply(tokens, function(x) ifelse(x %in% dict, x, '<UNK>'))
+    
+    if (length(tokens)==0) # no input
+            return(unigramsDF[1,'unigrams'])
+    
+    # input is 1 word: will always find a match in bigrams table (maybe <UNK>)
+    else if(length(tokens)==1) return(m1_bi[m1_bi$w1==tokens,]$w2)
+    
+    # else: input is 2+ words
+    tokens <- tokens[(length(tokens)-1):length(tokens)]
+    res <- m1_tri[m1_tri$w1==tokens[1] & m1_tri$w2==tokens[2],]$w3
+    if(length(res)>0) return(res) # found exact match in trigrams
+    return(m1_bi[m1_bi$w1==tokens[2],]$w2) # bigram prediction by last word
+}
+```

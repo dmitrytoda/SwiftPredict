@@ -1,0 +1,29 @@
+######## 6-grams Top-3 model 50k dict 4 GB RAM #########
+
+Overall top-3 score:     17.26 %
+Overall top-1 precision: 12.69 %
+Overall top-3 precision: 21.31 %
+Average runtime:         24.65 msec
+Number of predictions:   28464
+Total memory used:       3993.90 MB
+
+Dataset details
+ Dataset "blogs" (599 lines, 14587 words, hash 14b3c593e543eb8b2932cf00b646ed653e336897a03c82098b725e6e1f9b7aa2)
+  Score: 16.87 %, Top-1 precision: 12.17 %, Top-3 precision: 21.01 %
+ Dataset "tweets" (793 lines, 14071 words, hash 7fa3bf921c393fe7009bc60971b2bb8396414e7602bb4f409bed78c7192c30f4)
+  Score: 17.64 %, Top-1 precision: 13.21 %, Top-3 precision: 21.61 %
+  
+  
+######## 6-grams Top-3 model 20k dict 250 MB RAM ########
+Overall top-3 score:     18.69 %
+Overall top-1 precision: 13.97 %
+Overall top-3 precision: 22.80 %
+Average runtime:         22.23 msec
+Number of predictions:   28261
+Total memory used:       222.13 MB
+
+Dataset details
+ Dataset "blogs" (594 lines, 14384 words, hash 42297324fea404be7c81f9dc69f5a4000a8fa4378a322b5c7503a764d2749588)
+  Score: 18.31 %, Top-1 precision: 13.52 %, Top-3 precision: 22.35 %
+ Dataset "tweets" (793 lines, 14071 words, hash 7fa3bf921c393fe7009bc60971b2bb8396414e7602bb4f409bed78c7192c30f4)
+  Score: 19.08 %, Top-1 precision: 14.42 %, Top-3 precision: 23.26 %

@@ -1,5 +1,6 @@
 # Data
 data/
+sample_1-6_ngrams.data
 
 # History files
 .Rhistory
