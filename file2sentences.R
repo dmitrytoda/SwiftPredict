@@ -2,6 +2,7 @@
 # output: quanteda corpus reshaped to sentences
 
 files2sentences <- function(filenames) {
+        require(quanteda)
         texts <- sapply(filenames, readLines, skipNul = TRUE)
         texts <- sapply(texts, enc2utf8)
         texts <- unname(unlist(texts))

@@ -23,10 +23,16 @@ shinyUI(fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            h3("Predictions"),
-            tableOutput("preds"),
-            h3("Matching ngrams"),
-            verbatimTextOutput("path")
+            tabsetPanel(
+                tabPanel("Predictions",
+                         h3("Predictions"),
+                         tableOutput("preds"),
+                         h3("Matching ngrams"),
+                         verbatimTextOutput("path")
+                         ),
+                tabPanel("How it works",
+                         includeHTML("how-it-works.html"))
+            )
         )
     )
 ))

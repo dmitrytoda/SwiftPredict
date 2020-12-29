@@ -1,0 +1,7 @@
+Algorithm,Top-3 score,Top-1 accuracy,Top-3 accuracy,Avg runtime (msec)
+Baseline,6.64%,5.42%,8.11%,0.07
+Unpruned toy model,14.47%,10.36%,18.11%,30.94
+Pruned toy model,16.06%,11.85%,19.71%,30.88
+Best results from forum,17.74%,13.11%,21.75%,25.29
+Unpruned 50k dict full data,17.26%,12.69%,21.31%,24.65
+Pruned 20k dict full data,18.69%,13.97%,22.80%,22.23

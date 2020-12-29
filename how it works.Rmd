@@ -1,0 +1,16 @@
+---
+title: ""
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an app that implements the autosuggest functionality used on modern mobile keyboards. You can input any text and it will suggest 3 options of for the most likely next word.
+
+The prediction is implemented using an ngram model. I processed about 556 MB of plain text files coming from Twitter, blogs and news websites, all in English, and created tables of ngrams possible ngrams from 1 to 6 with respective counts. I further created a prediction model based on so called stupid backoff approach: the system tries to find the input in the longest ngram (in this case 6: 5 input words + 1 predicted next word), if there is nothing found, chops one word off from the left on the input and looks in 5-grams and so on until 3 unique predictions are found. 
+
+This approach proved to work better than some more sophisticated algorithms like Katz back-off. The initial model with 50,000 word dictionary and all possible ngrams counts took almost 4 GB in RAM, but after reducing the dictionary to 20,000 words and pruning all singletons (ngrams that were observed only once across all text corpora), the model shrank to only 400 MB and produces results within milliseconds.
+
+Apart from the predicted words themselves, the app also shows observed ngrams that predictions come from (that can be on different levels of n) to ensure transparency of the model.
+
+Many thanks to SwiftKey and the Coursera Data Science specialization for providing the data and setting up the problem of this project.

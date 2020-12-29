@@ -1,0 +1,12 @@
+name: SwiftPredict
+title: SwiftPredict
+username:
+account: dmitrytoda
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3433218
+bundleId: 4036638
+url: https://dmitrytoda.shinyapps.io/SwiftPredict/
+when: 1609192592.16434
+asMultiple: FALSE
+asStatic: FALSE

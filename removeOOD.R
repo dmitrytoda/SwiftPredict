@@ -3,7 +3,6 @@
 # replaced by <UNK> and collapsed together, with each word in its own column as factor
 removeOOD <- function(df, dict) {
         require(dplyr, data.table, quanteda)
-        print("Calling removeOOD")
         
         # get a separate data frame with one column per word (as factors)
         split_words <- data.frame(do.call('rbind', strsplit(df$feature,' ',fixed=TRUE)))
@@ -14,11 +13,9 @@ removeOOD <- function(df, dict) {
         
         # loop over columns
         for (i in colnames(split_words)) {
-                # cur_col <- split_words[,i] 
                 levels(split_words[,i]) <- c(levels(split_words[,i]), '<UNK>') # add <UNK> level
                 split_words[,i][! split_words[,i] %in% dict] <- '<UNK>' # replace OOD words with <UNK>
                 split_words[,i] <- droplevels(split_words[,i])
-                # cur_col -> split_words[,i]
         }
         
         # a DF with each word in its column and frequency as the last one
@@ -28,15 +25,12 @@ removeOOD <- function(df, dict) {
         colnames(df)[ncol(df)] <- 'frequency'
         
         # remove n-grams where last word in <UNK>
-        # except in unigrams
-        if(ncol(df) > 2)
-                df <- df[df[,ncol(df)-1] != '<UNK>',]
+        df <- df[df[,ncol(df)-1] != '<UNK>',]
         
         # collapse all rows that have the same n-gram (as many OOD words were mapped to the same <UNK> token)
         df %>% 
                 group_by_at(colnames(df)[1:ncol(df)-1]) %>% 
-                summarise(frequency=sum(frequency)) -> df # %>%
-                # arrange(desc(frequency))
+                summarise(frequency=sum(frequency)) -> df
         
         df <- setDT(df)
         # setkeyv(df, cols=colnames(df)[1:ncol(df)-1])

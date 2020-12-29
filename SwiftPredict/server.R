@@ -11,6 +11,10 @@ library(shiny)
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
+    library(data.table)
+    load('model20_with_dict')
+    source('combined_predict.R')
+    
     answer <- reactive({
         combined_predict(input$starterInput, model20, dict20, TRUE)
     })
