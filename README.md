@@ -32,10 +32,10 @@ Once you have a prepared model, only two functions are needed to use it:
 
 ## Web app
 
-Shiny_app folder contains all the code for a POC Shiny web app that allows you to input any text and get a prediction along with ngrams that contributed to it.
+`Shiny_app` folder contains all the code for a POC Shiny web app that allows you to input any text and get a prediction along with ngrams that contributed to it.
 
-* server.R and UI.R contain server and UI code respectively
-* model20_with_dict contains the 20,000 word dictionary and 1- to 6-gram model itself
+* `server.R` and `UI.R` contain server and UI code respectively
+* `model20_with_dict` contains the 20,000 word dictionary and 1- to 6-gram model itself
 * other files are just copied from the root folder for deployment to Shiny servers
 
 ## Legacy files
