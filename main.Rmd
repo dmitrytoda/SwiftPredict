@@ -1,7 +1,7 @@
 ---
 title: "SwiftPredict. Ngram model for text prediction."
 author: "Dmitry Dolgov"
-date: "12/26/2020"
+date: "01/08/2021"
 output: 
         html_document:
                 toc: true
@@ -22,14 +22,14 @@ In this notebook, I create a model with 9.5 million ngrams that
 * can be trained from scratch on a laptop
 * only occupies 219 MB of memory while working
 * provides 22.6% accuracy for top-3 predictions
-* returns predictions within within only 22 milliseconds
+* returns predictions within 22 milliseconds
 
 
 # Data and exploratory analysis
 
 ## Overview and sampling
 
-This project was initially done as the capstone for Johns Hopkins university [Data Science specialization](https://www.coursera.org/specializations/jhu-data-science) on Coursera. The data set was provided by [SwiftKey](https://www.microsoft.com/en-us/swiftkey).
+This project was initially done as the capstone for Johns Hopkins university [Data Science specialization](https://www.coursera.org/specializations/jhu-data-science). The author thanks [SwiftKey](https://www.microsoft.com/en-us/swiftkey) for providing the data set.
 
 The data came as a set of .txt files harvested from Twitter, news and blog websites, all in English language.
 
@@ -37,7 +37,7 @@ The data came as a set of .txt files harvested from Twitter, news and blog websi
 file.info('data/en_US/en_US.blogs.txt', 'data/en_US/en_US.news.txt', 'data/en_US/en_US.twitter.txt')[1]
 ```
 
-With files ranging from 159 to 200 MB in size, or from 900 thousand to 2.3 million lines each, it makes sense to use a small sample for the exploratory analysis, before training the model on a full data set. The code for createSample() function is listed in the [Appendix](#appendix) (as well as other helper functions). Here the calls are not evaluated as I already have the sample files.
+With files ranging from 159 to 200 MB in size, or from 900 thousand to 2.3 million lines each, it makes sense to use a small sample for the exploratory analysis, before training the model on a full data set. The code for `createSample()` function is listed in the [Appendix](#appendix) (as well as other helper functions). Here the calls are not evaluated as I already have the sample files.
 
 ```{r create_sample, eval=FALSE}
 source('createSample.R')
@@ -53,12 +53,12 @@ file.info('./data/en_US/sample.blogs.txt', './data/en_US/sample.news.txt', './da
 ```
 Now file sizes are between 3 and 10 MB which is more manageable. For further processing the following libraries will be needed:
 ```{r libraries, message=FALSE}
-library(ggplot2)
-library(scales)
-library(quanteda)
-library(dplyr)
-library(data.table)
-library(wordcloud)
+library(ggplot2) # plotting
+library(scales) # labels for plotting
+library(wordcloud) # plotting word clouds
+library(quanteda) # text mining
+library(dplyr) # data processing
+library(data.table) # data storage and search optimization
 ```
 
 ## Exploratory analysis
@@ -74,7 +74,7 @@ readLines('./data/en_US/sample.twitter.txt', n=5)
 
 It would be convenient to work with a series of words, all lowercase, without punctuation marks and without any weird symbols in it. For that ends, I will use [quanteda](https://quanteda.io/) corpus object split into one-sentence documents that is further tokenized into separate words. The rationale is that it is separate words the system will predict, and they will be predicted within a sentence context.
 
-All these tasks are done by two helper functions: files2sentences() and str2tokens(). See [Appendix](#appendix) for code.
+All these tasks are done by two helper functions: `files2sentences()` and `str2tokens()`. See [Appendix](#appendix) for code.
 
 ```{r corp_dict, cache=TRUE}
 source('file2sentences.R')
@@ -104,17 +104,30 @@ cover["90"] <- min(which(words$cumperc>=.9))
 cover["95"] <- min(which(words$cumperc>=.95))
 cover["99"] <- min(which(words$cumperc>=.99))
 
-ggplot(data=words, aes(x=as.integer(rownames(words)), y=cumperc)) + geom_point(color='steelblue') + 
-        scale_x_continuous(labels = comma, trans="log10", breaks=c(10, cover["50"], 1000, cover["90"], cover["95"], cover["99"]), minor_breaks = NULL) +
+ggplot(data=words, aes(x=as.integer(rownames(words)), y=cumperc)) +
+        geom_point(color='steelblue') + 
+        scale_x_continuous(
+                labels = comma, 
+                trans="log10", 
+                breaks=c(
+                        10, cover["50"], 1000, cover["90"], cover["95"], cover["99"]
+                        ), 
+                minor_breaks = NULL
+                ) +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
         labs(x='Words count (log scale)', y='Cumulative % covered') +
-        geom_hline(yintercept=.5) + 
-        geom_hline(yintercept=.9) + 
+        geom_hline(yintercept=.5) +
+        geom_hline(yintercept=.9) +
         geom_hline(yintercept=.95) +
-        geom_hline(yintercept=.99)
+        geom_hline(yintercept=.99) +
+        scale_y_continuous(
+                breaks = c(.25, .75, as.numeric(names(cover))/100), 
+                labels = label_percent(accuracy = 1L), 
+                minor_breaks = NULL
+                )
 ```
 
-This is a plot of which % of the text can be covered by using a certain number of most frequent words. It follows a known theoretical distribution described by [Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law). This fact is tangential to further analysis so I will not bother with proper statistical tests to confirm this. The imporant takeaway is that
+This is a plot of which % of the text can be covered by using a certain number of most frequent words. It follows a known theoretical distribution described by [Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law). This fact is tangential to further analysis so I will not bother with proper statistical tests like a QQ plot to confirm this. The imporant takeaway is that
 
 * 50% of text can be covered with only ``r cover['50']`` words
 * 90% of text are covered by ``r cover['90']`` words
@@ -129,10 +142,14 @@ dict20 <- words[1:20000]$feature
 
 ### Most frequent words
 
-Unsurprisingly, English language consists mostly of function words like the, to, and, a etc, with a few personal pronouns and modal verbs sneaking into top-30 chart.
+Unsurprisingly, English language consists mostly of function words like "the", "to", "and", "a" etc, with a few personal pronouns and modal verbs sneaking into top-30 chart.
 
 ```{r top_words, cache=TRUE}
-ggplot(data=words[1:30,], aes(x=reorder(feature, -perc), y=perc)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('word')
+ggplot(data=words[1:30,], aes(x=reorder(feature, -perc), y=perc)) +
+        geom_bar(stat='identity', fill='chocolate3') + 
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        xlab('word') +
+        scale_y_continuous(name = '% of text', labels = label_percent(accuracy = 1L))
 ```
 
 ### Ngram frequencies visualization {.tabset}
@@ -176,7 +193,7 @@ In this section I will build a toy model, using only the sampled data (about 2% 
 
 There are many ways of predicting the next word based on a known sequence of preceding words. If you google [ngram language models](https://www.google.com/search?q=ngram+language+models), you will find many articles aimed at constructing a probabilistic model, that is, one that will produce a probability distribution of what the n-th word may be, given a preceding n-1 words:
 
-**P(Wn | W1W2..Wn-1)**
+<p style="text-align: center;"><b>P(Wn | W1W2..Wn-1)</b></p>
 
 * If ngram W1W2..Wn is observed in the data, we estimate the required probability using maximum likelihood. 
 * If it is not observed, statisticians have come up with many clever ways to still infere its probability using some sort of _smoothing_, either by discounting some probability mass from observed to unobserved ngrams, or by interpolating unobserved probabilities from observed ones.
@@ -204,12 +221,12 @@ Now you can see that we do not even need to store the entire frequency tables! F
 
 ### Removing out of dictionary words
 
-Ngrams we currently have are raw, that is, contain out-of-dictionary (OOD) words. The following code, using removeOOD() helper function,
+Ngrams we currently have are raw, that is, contain out-of-dictionary (OOD) words. The following code, using `removeOOD()` helper function,
 
 1. Splits a characater ngram into separate words 
 2. Replaces OOD words with \<UNK\> token
 3. Recalculates frequencies by collapsing equivalent ngrams (e.g. "I love XXX" and "I love YYY" both became "I love \<UNK\>" if XXX and YYY are out of dictionary -> their frequencies should be counted together)
-4. Transforms data.frame to data.table 
+4. Transforms `data.frame` to `data.table` 
 5. Sets all ngrams words as keys (but not the frequency column) to accelerate binary search
 
 ```{r removeOOD, cache=TRUE}
@@ -236,7 +253,7 @@ That's it, this is basically my toy model. Before evaluating the model, and when
 
 ### Making predictions {.tabset}
 
-combined_predict() function implements the algorithm described in the [Stupid backoff](#stupid) section. The code, as always, is listed in the [Appendix](#appendix). Let's use it to make some predictions and see where they come from (that is, what were the original ngrams with their frequencies that contributed to the prediction).
+`combined_predict()` function implements the algorithm described in the [Stupid backoff](#stupid) section. The code, as always, is listed in the [Appendix](#appendix). Let's use it to make some predictions and see where they come from (that is, what were the original ngrams with their frequencies that contributed to the prediction).
 
 ```{r predictions, warning=FALSE}
 source("combined_predict.R")
@@ -247,7 +264,7 @@ p[[3]] <- combined_predict("You shall not", ngrams, dict20, verbose=TRUE)
 p[[4]] <- combined_predict("Never have I ever", ngrams, dict20, verbose=TRUE)
 ```
 
-With verbose=TRUE, combined_predict() returns a list of two elements:
+With `verbose=TRUE`, `combined_predict()` returns a list of two elements:
 
 1. Character vector of top-3 predictions
 2. A list of observed ngrams with frequencies that start with the same n-1 words. Only 3 of them will have contributed to the top-3 prediction, but it is interesting to see what other options were.
@@ -271,7 +288,7 @@ Apparently there is no trigrams starting with exactly "Bill loves", so the syste
 p[[3]]
 ```
 
-A more interesting case: there is a quagram "you shall not go" but only one. As we want top 3 predictions, the model also looks into trigrams and finds six starting with "shall not", two of which contribute to prediction.
+A more interesting case: there is a quadgram "you shall not go" but only one. As we want top 3 predictions, the model also looks into trigrams and finds six starting with "shall not", two of which contribute to prediction.
 
 #### Never have I ever
 ```{r p4}
@@ -287,8 +304,9 @@ Now that we've seen some original counts, I can remove unneeded information:
 1. Keep only top-3 prediction for each n-1 word combination
 2. Replace frequencies with prediction ranks (factor with levels 1, 2, 3) as we are no longer intersted in the fact that prediction A was observed 1500 times and prediction B 666 times, only that A was more frequent than B.
 3. Pruning: it is often advisable to remove ngrams with counts below a certain minimum. I will try two options and compare them:
-        + no pruning
-        + remove all singletons (ngrams observed only once)
+
+        - no pruning
+        - remove all singletons (ngrams observed only once)
         
 ```{r groom_toy, cache=TRUE}
 source('keep3.R')
@@ -304,7 +322,7 @@ ngrams[[2]]
 ngrams_pruned[[2]]
 ```
 
-Not pruned bigrams have now have ``r nrow(ngrams[[2]])`` rows, that is, almost exactly 3 predictions for each starter words. Pruned ones have only ``r nrow(ngrams_pruned[[2]])`` rows.
+Not pruned bigrams have now have ``r nrow(ngrams[[2]])`` rows, that is, almost exactly 3 predictions for each starter word. Pruned ones have only ``r nrow(ngrams_pruned[[2]])`` rows.
 
 The usual update on model size:
 ```{r pruned_size}
@@ -354,6 +372,7 @@ Now that I have a working toy model and the understanding that it does not lag t
 Batch processing of the entire data set took a few hours on my laptop with 16 GB RAM and it was an interactive process of trial and error. Here I will just load my saved model, but the basic idea was to 
 
 1. Split data into batches
+
         a. For 1-4-grams the 3 sources (Twitter, news and blogs) can each be considered a single batch
         b. For 5-6-grams, even that is too much, so I took a half of each source
 2. For each batch, calculate all ngrams separately and save to disk
@@ -367,7 +386,7 @@ MB <- round(object.size(model20)/(2^20))
 count <- round(sum(sapply(model20, nrow))/10^6, 1)
 ```
 
-Final model takes ``r MB`` MB in memory and contains ``r count`` different ngrams.
+Final model takes ``r MB`` MB in memory and contains ``r count`` million different ngrams.
 
 ## Making predictions {.tabset}
 
@@ -407,7 +426,7 @@ Ah finally! The famous "you shall not pass" is here and on the top row!
 p[[4]]
 ```
 
-Similar, but not the same. Is there any difference after all?
+Now all the predictions come from quadgrams, while toy model also took into the account a quintagram "never have  i ever felt ". However, it was observed only once, so it must have been pruned out.
 
 ## Evaluating the model
 
@@ -436,7 +455,7 @@ Try typing any text and see what it suggests! If you open it from mobile, you ca
 # Next steps
 
 How can this model be improved? One obvious way is to collect more data. However, a more modern approach would be to use a recurrent neural network (RNN), or more specifically, Coupled Input-Forget Gates (CIFG) variation.
-In [this article](https://www.researchgate.net/publication/328825912_Federated_Learning_for_Mobile_Keyboard_Prediction), the authors compare ngram baseline model with server-trained CIFG and with federated CIFG (one trained on a user's device using their own data). They list following top-3 accuracies (that they call "recall" which is the same in this particular case):
+In [this article](https://www.researchgate.net/publication/328825912_Federated_Learning_for_Mobile_Keyboard_Prediction), the authors compare ngram baseline model with server-trained CIFG and with federated CIFG (one trained on a user's device using their own data). They list following top-3 accuracies (that they refer to as "recall" which is the same in this particular case):
 
 1. Ngram model - 22.1%
 2. Server-trained CIFG - 27.1%
